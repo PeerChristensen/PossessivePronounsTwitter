@@ -31,7 +31,7 @@ nTopics <- seq(5,50,5)
 many_models_stm <- data_frame(K = nTopics) %>%
   mutate(topic_model = future_map(K, ~stm(dfSparse, K = ., verbose = TRUE)))
 
-end_time_stm <- Sys.time() # 
+end_time_stm <- Sys.time() # Time difference of 3.680019 hours
 
 heldout <- make.heldout(dfSparse)
 
@@ -43,13 +43,16 @@ k_result <- many_models_stm %>%
          bound              = map_dbl(topic_model, function(x) max(x$convergence$bound)),
          lfact              = map_dbl(topic_model, function(x) lfactorial(x$settings$dim$K)),
          lbound             = bound + lfact,
-         iterations         = map_dbl(topic_model, function(x) length(x$convergence$bound)))
+         iterations         = map_dbl(topic_model, function(x) length(x$convergence$bound))) %>%
+  mutate(mean_semantic_coherence = map(semantic_coherence,mean) %>% unlist(),
+         mean_exclusivity = map(exclusivity,mean) %>% unlist())
 
 k_result %>%
   transmute(K,
             `Lower bound`         = lbound,
             Residuals             = map_dbl(residual, "dispersion"),
             `Semantic coherence`  = map_dbl(semantic_coherence, mean),
+            Exclusivity           = map_dbl(exclusivity, mean),
             `Held-out likelihood` = map_dbl(eval_heldout, "expected.heldout")) %>%
   gather(Metric, Value, -K) %>%
   ggplot(aes(K, Value, color = Metric)) +
@@ -57,9 +60,7 @@ k_result %>%
   facet_wrap(~Metric, scales = "free_y") +
   labs(x        = "K (number of topics)",
        y        = NULL,
-       title    = "Model diagnostics by number of topics",
-       subtitle = "These diagnostics indicate that a good number of topics would be around 15")
-
+       title    = "Model diagnostics by number of topics")
 
 excl_sem_plot <- k_result                          %>%
   select(K, exclusivity, semantic_coherence)       %>%
@@ -81,13 +82,20 @@ anim_plot <- excl_sem_plot +
   transition_time(as.numeric(K)) +
   ease_aes('linear')
 animate(anim_plot, nframes = 8, fps = 0.5)
+
+k_result %>% 
+  ggplot(aes(x=mean_semantic_coherence, y = mean_exclusivity,
+             label=K)) +
+  geom_point(size=3) +
+  geom_text_repel(size=5) +
+  geom_smooth()
 # ---------------------------------
 
 # ---------------------------------
 # SELECT STM MODEL
 
 topic_model_stm <- k_result %>% 
-  filter(K ==10)            %>% 
+  filter(K ==20)            %>% 
   pull(topic_model)         %>% 
   .[[1]]
 
@@ -101,7 +109,7 @@ td_beta <- tidy(topic_model_stm)
 top_terms <- td_beta  %>%
   arrange(beta)       %>%
   group_by(topic)     %>%
-  top_n(6, beta)      %>%
+  top_n(5, beta)      %>%
   arrange(-beta)      %>%
   select(topic, term) %>%
   summarise(terms = list(term)) %>%
