@@ -49,7 +49,15 @@ word_pairs %>%
                      expand = c(0,0)) + 
   facet_wrap(~item1, scales = "free") +
   scale_fill_manual(values = c("steelblue", "indianred")) + coord_flip() + labs(x = "words") +
-  theme_minimal()
+  theme_minimal() +
+  theme(axis.text  = element_text(size = 16),
+        axis.title   = element_text(size = 18),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        strip.text.x = element_text(size=24, face="bold"),
+        #axis.title.y = element_text(margin = margin(r = 40,l=40)),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.y = element_blank())
 
 # set.seed(611)
 # 
@@ -104,7 +112,15 @@ cor_words %>%
                      expand = c(0,0)) + 
   facet_wrap(~item1, scales = "free") +
   scale_fill_manual(values = c("steelblue", "indianred")) + coord_flip() + labs(x = "words") +
-  theme_minimal()
+  theme_minimal() +
+  theme(axis.text  = element_text(size = 16),
+        axis.title   = element_text(size = 18),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        strip.text.x = element_text(size=24, face="bold"),
+        #axis.title.y = element_text(margin = margin(r = 40,l=40)),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.y = element_blank())
 
 ########## 1. BIGRAMS MEN ########################################
 
