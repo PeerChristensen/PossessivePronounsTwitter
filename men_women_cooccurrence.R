@@ -187,6 +187,7 @@ women <- read_csv("mwTweets.csv") %>%
   filter(word2 == "women")
 
 womenCount <- women  %>%
+  filter(word1!="amp",word1!="ii") %>%
   count(word1,word2) %>%
   select(word1,n)    %>%
   arrange(desc(n))   %>%
@@ -196,7 +197,6 @@ wordcloud(words = womenCount$word1, freq = womenCount$n, min.freq = 30, random.o
           colors=brewer.pal(9,"Reds")[4:9])
 
 womenCountTop <- womenCount        %>%
-  filter(word1!="amp",word1!="ii") %>%
   mutate(row = rev(row_number()))  %>%
   top_n(20,n)
 
@@ -218,4 +218,5 @@ womenCountTop %>%
         panel.grid.major.y = element_blank()) +
   scale_fill_gradient(low=brewer.pal(9,"Reds")[2],high=brewer.pal(9,"Reds")[9])
 
+ggsave("womenCount.png")
 
