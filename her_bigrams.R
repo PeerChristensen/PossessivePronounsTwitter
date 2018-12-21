@@ -4,32 +4,33 @@ library(cldr)
 library(udpipe)
 
 her <- read_csv("herTweets.csv") %>%
-  select(screen_name, text) %>% 
+  select(screen_name, text)      %>% 
   mutate(language = detectLanguage(text)$detectedLanguage) %>%
   filter(language=="ENGLISH")
   
 her <- her %>%
   unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
-  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  separate(bigram, c("word1", "word2"), sep = " ")     %>%
   filter(word1 == "her")
 
 #udmodel <- udpipe_download_model(language = "english")
+udmodel <- udpipe_load_model("danish-ud-2.0-170801.udpipe")
 
 include <- udpipe(x = her$word2,
              object = udmodel)
 
-include <- include %>%
-  select(token,upos) %>%
+include <- include      %>%
+  select(token,upos)    %>%
   filter(upos =="NOUN") %>%
   select(token) 
 
 her <- her %>%
   filter(word2 %in% include$token)
 
-herCount <- her %>%
+herCount <- her      %>%
   count(word1,word2) %>%
-  arrange(desc(n)) %>%
-  select(word2,n) %>%
+  arrange(desc(n))   %>%
+  select(word2,n)    %>%
   mutate(row = rev(row_number()))
 
 #unite(bigram,word1,word2, sep = " ")
@@ -37,7 +38,7 @@ herCount <- her %>%
 wordcloud(words = herCount$word2, freq = herCount$n, min.freq = 50, random.order=FALSE, rot.per=0.35, 
           colors=brewer.pal(9,"Reds")[4:9])
 
-herCount %>%
+herCount      %>%
   top_n(20,n) %>%
   ggplot(aes(row, n, fill = n)) +
   geom_col(show.legend = FALSE,width=.9) +

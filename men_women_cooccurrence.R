@@ -14,32 +14,42 @@ library(wordcloud)
 df <- read_csv("mwTweets.csv")
 
 df %<>%
-  select(screen_name, text) %>%
+  select(screen_name, text)    %>%
   mutate(text = tolower(text)) %>%
-  mutate(gender = ifelse(str_detect(text,"women"),"women","men")) %>%
-  unnest_tokens(word, text) %>%
-  anti_join(stop_words[stop_words$lexicon=="SMART",])     %>%
+  mutate(gender = case_when(str_detect(text,"women") &
+                            str_detect(text," men")   ~ "both",
+                            str_detect(text,"women")  ~ "women",
+                            str_detect(text,"men")    ~ "men")) %>%
+  unnest_tokens(word, text)    %>%
+  anti_join(stop_words[stop_words$lexicon=="SMART",]) %>%
   mutate(word = removeWords(word,c(stopwords(),"t.co","https","amp","'s","’s"))) %>%
-  add_count(word)           %>%
-  filter(n > 1,word != "")  %>%
+  add_count(word)              %>%
+  filter(n > 1,word != "")     %>%
   select(-n)
 
 ########## 1. CO-OCCURRENCE ########################################
 
-word_pairs_men <- df %>%
+word_pairs_men <- df      %>%
   filter(gender == "men") %>%
   pairwise_count(word, screen_name, sort = TRUE) %>%
-  filter(item1 == "men") %>% 
+  filter(item1 == "men")  %>% 
   top_n(20)
 
-word_pairs_women <- df %>%
+word_pairs_women <- df      %>%
   filter(gender == "women") %>%
   pairwise_count(word, screen_name, sort = TRUE)  %>%
-  filter(item1 == "women") %>% 
+  filter(item1 == "women")  %>% 
   top_n(20)
 
-word_pairs <- rbind(word_pairs_men, word_pairs_women) %>%
-  mutate(order = rev(row_number()), item1 = factor(item1, levels = c("men", "women")))
+word_pairs_both <- df      %>%
+  filter(gender == "both") %>%
+  pairwise_count(word, screen_name, sort = TRUE) %>%
+  filter(item1 == "men", item2 != "men" & item2 != "women")  %>% 
+  top_n(20) %>%
+  mutate(item1 = "both")
+ 
+word_pairs <- rbind(word_pairs_men, word_pairs_women,word_pairs_both) %>%
+  mutate(order = rev(row_number()), item1 = factor(item1, levels = c("men", "women","both")))
 
 word_pairs %>% 
   ggplot(aes(x = order, y = n, fill = item1)) + 
@@ -48,7 +58,7 @@ word_pairs %>%
                      labels = word_pairs$item2, 
                      expand = c(0,0)) + 
   facet_wrap(~item1, scales = "free") +
-  scale_fill_manual(values = c("steelblue", "indianred")) + coord_flip() + labs(x = "words") +
+  scale_fill_manual(values = c("steelblue", "indianred","darkgreen")) + coord_flip() + labs(x = "words") +
   theme_minimal() +
   theme(axis.text  = element_text(size = 16),
         axis.title   = element_text(size = 18),
@@ -58,6 +68,8 @@ word_pairs %>%
         #axis.title.y = element_text(margin = margin(r = 40,l=40)),
         panel.grid.minor.y = element_blank(),
         panel.grid.major.y = element_blank())
+
+ggsave("mw_cooccurrence.png")
 
 # set.seed(611)
 # 
@@ -88,7 +100,7 @@ word_pairs %>%
 cor_men <- df               %>%
   filter(gender == "men")   %>%
   group_by(word) %>%
-  filter(n() >= 1000)       %>%
+  filter(n() >= 100)       %>%
   pairwise_cor(word, screen_name, sort = TRUE) %>% 
   filter(item1 == "men")    %>% 
   top_n(20)
@@ -122,26 +134,28 @@ cor_words %>%
         panel.grid.minor.y = element_blank(),
         panel.grid.major.y = element_blank())
 
+ggsave("mw_correlation.png")
+
 ########## 1. BIGRAMS MEN ########################################
 
 men <- read_csv("mwTweets.csv") %>%
-  select(screen_name, text) %>% 
+  select(screen_name, text)     %>% 
   unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
-  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  separate(bigram, c("word1", "word2"), sep = " ")     %>%
   filter(word2 == "men")
 
-menCount <- men %>%
+menCount <- men      %>%
   count(word1,word2) %>%
-  select(word1,n) %>%
-  arrange(desc(n)) %>%
+  select(word1,n)    %>%
+  arrange(desc(n))   %>%
   anti_join(stop_words[stop_words$lexicon=="SMART",],by = c("word1" = "word")) 
   
 wordcloud(words = menCount$word1, freq = menCount$n, min.freq = 30, random.order=FALSE, rot.per=0.35, 
           colors=brewer.pal(9,"Blues")[4:9])
 
-menCountTop <- menCount %>%
+menCountTop <- menCount            %>%
   filter(word1!="amp",word1!="ii") %>%
-  mutate(row = rev(row_number())) %>%
+  mutate(row = rev(row_number()))  %>%
   top_n(20,n)
 
 menCountTop %>%
@@ -162,26 +176,28 @@ menCountTop %>%
         panel.grid.major.y = element_blank()) +
   scale_fill_gradient(low=brewer.pal(9,"Blues")[2],high=brewer.pal(9,"Blues")[9])
 
+ggsave("menCount.png")
+
 ########## 1. BIGRAMS WOMEN ########################################
 
 women <- read_csv("mwTweets.csv") %>%
-  select(screen_name, text) %>% 
+  select(screen_name, text)       %>% 
   unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
-  separate(bigram, c("word1", "word2"), sep = " ") %>%
+  separate(bigram, c("word1", "word2"), sep = " ")     %>%
   filter(word2 == "women")
 
-womenCount <- women %>%
+womenCount <- women  %>%
   count(word1,word2) %>%
-  select(word1,n) %>%
-  arrange(desc(n)) %>%
+  select(word1,n)    %>%
+  arrange(desc(n))   %>%
   anti_join(stop_words[stop_words$lexicon=="SMART",],by = c("word1" = "word")) 
 
 wordcloud(words = womenCount$word1, freq = womenCount$n, min.freq = 30, random.order=FALSE, rot.per=0.35, 
           colors=brewer.pal(9,"Reds")[4:9])
 
-womenCountTop <- womenCount %>%
+womenCountTop <- womenCount        %>%
   filter(word1!="amp",word1!="ii") %>%
-  mutate(row = rev(row_number())) %>%
+  mutate(row = rev(row_number()))  %>%
   top_n(20,n)
 
 womenCountTop %>%
