@@ -70,4 +70,17 @@ she[sapply(she, is.list)] <- lapply(she[sapply(she, is.list)],
 
 write.csv(she,"sheTweets.csv")
 beep("mario")
+
+######### CHRISTMAS ######
+
+xmas <- search_tweets2(
+  "All I want for christmas is", n = 100000, include_rts = FALSE,
+  retryonratelimit = TRUE, lang = "en"
+)
+
+xmas[sapply(xmas, is.list)] <- lapply(xmas[sapply(xmas, is.list)], 
+                                  as.character)
+
+write.csv(xmas,"xmasTweets.csv")
+
  
