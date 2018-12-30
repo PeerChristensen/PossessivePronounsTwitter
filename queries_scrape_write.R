@@ -3,10 +3,6 @@ library(rtweet)
 library(tidyverse)
 library(beepr)
 
-token <- create_token(
-    app = "textR",
-    consumer_key = "hrztENrNCQ5FpXKK1RdeN8zFf",
-    consumer_secret = "GE9WUVCt4mDpmT6u2SNif5rxbzG3DPK0gBZpu7tz1TopOlQYnE")
 
 ######### HIS #############
 
