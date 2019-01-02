@@ -6,7 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, warning=F, message=F, fig.width = 9, fig.height = 7,fig.pos = "center")
 ```
 
 I've been wanting to try out the excellent rtweet package for some time now, and I recently came up with the idea to explore what Twitter users are tweeting about men and women these days. In this post, we'll look at gender pronouns and word frequency in the following analyses:
@@ -25,6 +25,7 @@ library(tidyverse)
 library(tidytext)
 library(wordcloud)
 library(tm)
+library(widyr)
 library(udpipe)
 library(magrittr)
 library(gridExtra)
@@ -309,6 +310,7 @@ hisPlot <- hisCount     %>%
         axis.title.y = element_blank(),
         panel.grid.minor.y = element_blank(),
         panel.grid.major.y = element_blank()) +
+  ggtitle("\"His __\"") +
   scale_fill_gradient(low=brewer.pal(9,"Blues")[2],high=brewer.pal(9,"Blues")[9])
 ```
 
@@ -358,9 +360,9 @@ herPlot <- herCount      %>%
         axis.title   = element_text(size = 18),
         axis.title.x = element_blank(),
         axis.title.y = element_blank(),
-        #axis.title.y = element_text(margin = margin(r = 40,l=40)),
         panel.grid.minor.y = element_blank(),
         panel.grid.major.y = element_blank()) +
+  ggtitle("\"Her __\"") +
   scale_fill_gradient(low=brewer.pal(9,"Reds")[2],high=brewer.pal(9,"Reds")[9])
 ```
 
@@ -370,11 +372,229 @@ I've completed the same steps for nouns following 'her'. Let's plot and compare 
 grid.arrange(hisPlot,herPlot, ncol = 2)
 ```
 
-Apparently, tweets are often concerned with family relations and body parts.
+Apparently, tweets about possessions and attributes are often concerned with family relations and body parts.
 
-## S/he is a quadrogram
+## "What is s/he?"
 
+In this section, we'll examine the most frequent trigram constructions with the form "s/he is X"
 
-## Conclusions
+We'll again use parts-of-speech tagging and only consider adjectives in the place of X.
+
+```{r}
+heTweets <- read_csv("heTweets.csv") 
+
+he <- heTweets                 %>%
+  select(screen_name, text)    %>% 
+  mutate(text = tolower(text)) %>%
+  mutate(text = str_replace(text, "he's", "he is"))         %>%
+  unnest_tokens(trigram, text, token = "ngrams", n = 3)     %>%
+  separate(trigram, c("word1", "word2","word3"), sep = " ") %>%
+  filter(word1 == "he", word2 == "is")
+
+udmodel <- udpipe_load_model("english-ud-2.0-170801.udpipe")
+
+include <- udpipe(x = he$word3,
+                  object = udmodel)
+
+include <- include      %>%
+  select(token,upos)    %>%
+  filter(upos == "ADJ") %>%
+  select(token) 
+
+he <- he %>%
+  filter(word3 %in% include$token)
+
+heCount <- he              %>%
+  count(word1,word2,word3) %>%
+  arrange(desc(n))         %>%
+  select(word3,n)          %>%
+  mutate(row = rev(row_number()))
+```
+
+Just like above, the same steps has been completed for tweets with "she is X".
+
+```{r echo = F}
+sheTweets <- read_csv("sheTweets.csv") 
+
+she <- sheTweets               %>%
+  select(screen_name, text)    %>% 
+  mutate(text = tolower(text)) %>%
+  mutate(text = str_replace(text, "she's", "she is")) %>%
+  unnest_tokens(trigram, text, token = "ngrams", n = 3) %>%
+  separate(trigram, c("word1", "word2","word3"), sep = " ") %>%
+  filter(word1 == "she", word2 == "is")
+
+udmodel <- udpipe_load_model("english-ud-2.0-170801.udpipe")
+
+include <- udpipe(x = she$word3,
+                  object = udmodel)
+
+include <- include      %>%
+  select(token,upos)    %>%
+  filter(upos == "ADJ") %>%
+  select(token) 
+
+she <- she %>%
+  filter(word3 %in% include$token)
+
+sheCount <- she            %>%
+  count(word1,word2,word3) %>%
+  arrange(desc(n))         %>%
+  select(word3,n)          %>%
+  mutate(row = rev(row_number()))
+```
+
+We'll again prepare bar charts highlighting the most common words. The code is pretty much redundant, so let's skip that here.
+
+```{r echo = F}
+hePlot <- heCount %>%
+  top_n(20,n)     %>%
+  ggplot(aes(row, n, fill = n)) +
+  geom_col(show.legend = FALSE,width = .9) +
+  coord_flip() +
+  scale_x_continuous( 
+    breaks = heCount$row,
+    labels = heCount$word3,
+    expand = c(0,0)) +
+  theme_minimal() + 
+  theme(axis.text    = element_text(size = 14),
+        axis.title   = element_text(size = 18),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.y = element_blank()) +
+  ggtitle("\"He is __\"") +
+  scale_fill_gradient(low=brewer.pal(9,"Blues")[2],high=brewer.pal(9,"Blues")[9])
+
+shePlot <- sheCount %>%
+  top_n(20,n)       %>%
+  ggplot(aes(row, n, fill = n)) +
+  geom_col(show.legend = FALSE,width = .9) +
+  coord_flip() +
+  scale_x_continuous( 
+    breaks = sheCount$row,
+    labels = sheCount$word3,
+    expand = c(0,0)) +
+  theme_minimal() + 
+  theme(axis.text    = element_text(size = 14),
+        axis.title   = element_text(size = 18),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.y = element_blank()) +
+  ggtitle("\"She is __\"") +
+  scale_fill_gradient(low=brewer.pal(9,"Reds")[2],high=brewer.pal(9,"Reds")[9])
+
+grid.arrange(hePlot,shePlot,ncol=2)
+```
+
+The first question on my mind is *where did he go? Without looking at some tweets, I can't figure out why 'gone' should top the list for tweets about men. Conversely, it is perhaps not too surprising that tweets about women tend to focus on looks.
+
+## X is what s/he is!
+
+Finally, let's objectify both genders and find the most common quadrograms(?) starting with "s/he is a(n) .."
+We'll limit results to nouns this time.
+
+Since the code is largely redundant, let's just see what we get!
+
+```{r echo = F}
+he <- heTweets                %>%
+  select(screen_name, text) %>% 
+  mutate(text = tolower(text)) %>%
+  mutate(text = str_replace(text, "he's", "he is")) %>%
+  unnest_tokens(quadrogram, text, token = "ngrams", n = 4) %>%
+  separate(quadrogram, c("word1", "word2","word3", "word4"), sep = " ") %>%
+  filter(word1 == "he", word2 == "is", word3 == "a" | word3 == "an")
+
+include <- udpipe(x = he$word4,
+                  object = udmodel)
+
+include <- include      %>%
+  select(token,upos)    %>%
+  filter(upos =="NOUN") %>%
+  select(token) 
+
+he <- he %>%
+  filter(word4 %in% include$token)
+
+heCount <- he         %>%
+  count(word1,word2,word3,word4) %>%
+  arrange(desc(n))      %>%
+  select(word4,n)       %>%
+  mutate(row = rev(row_number()))
+
+hePLot2 <- heCount %>%
+  top_n(20,n) %>%
+  ggplot(aes(row, n, fill = n)) +
+  geom_col(show.legend = FALSE,width = .9) +
+  coord_flip() +
+  scale_x_continuous( 
+    breaks = heCount$row,
+    labels = heCount$word4,
+    expand = c(0,0)) +
+  theme_minimal() + 
+  theme(axis.text    = element_text(size = 14),
+        axis.title   = element_text(size = 18),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.y = element_blank()) +
+  ggtitle("\"He is a(n) __\"") +
+  scale_fill_gradient(low=brewer.pal(9,"Blues")[2],high=brewer.pal(9,"Blues")[9])
+
+she <- sheTweets               %>%
+  select(screen_name, text)    %>% 
+  mutate(text = tolower(text)) %>%
+  mutate(text = str_replace(text, "she's", "she is")) %>%
+  unnest_tokens(quadrogram, text, token = "ngrams", n = 4) %>%
+  separate(quadrogram, c("word1", "word2","word3", "word4"), sep = " ") %>%
+  filter(word1 == "she", word2 == "is", word3 == "a" | word3 == "an")
+
+include <- udpipe(x = she$word4,
+                  object = udmodel)
+
+include <- include      %>%
+  select(token,upos)    %>%
+  filter(upos =="NOUN") %>%
+  select(token) 
+
+she <- she %>%
+  filter(word4 %in% include$token)
+
+sheCount <- she         %>%
+  count(word1,word2,word3,word4)    %>%
+  arrange(desc(n))      %>%
+  select(word4,n)       %>%
+  mutate(row = rev(row_number()))
+
+shePlot2 <- sheCount %>%
+  top_n(20,n) %>%
+  ggplot(aes(row, n, fill = n)) +
+  geom_col(show.legend = FALSE,width = .9) +
+  coord_flip() +
+  scale_x_continuous( 
+    breaks = sheCount$row,
+    labels = sheCount$word4,
+    expand = c(0,0)) +
+  theme_minimal() + 
+  theme(axis.text    = element_text(size = 14),
+        axis.title   = element_text(size = 18),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.y = element_blank()) +
+  ggtitle("\"She is a(n) __\"") +
+  scale_fill_gradient(low=brewer.pal(9,"Reds")[2],high=brewer.pal(9,"Reds")[9])
+
+grid.arrange(hePLot2,shePlot2,ncol=2)
+```
+
+The words describing men are somewhat more negative than those describing women in tweets. However, I bet that, in most cases, the words 'traitor', 'idiot', 'baby', 'disgrace', 'racist' and 'coward' are used in reference to Donald Trump. 
+
+## Conclusion
+
+It is important to keep in mind that the analyses presented here are based on tweets created during a fairly short time window (approx. 20 hours). It would therefore be interesting to compare the resulting word frequencies with those from a set of different tweets.
+
+Nevertheless, we saw clear differences in how men and women were characterised in the downloaded tweets. It would of course be very useful to dig into the contexts in which men and women are mentioned. However, my main goal here was to explore what can be done with simple word frequency and n-gram analyses of specific linguistic constructions.
 
 
