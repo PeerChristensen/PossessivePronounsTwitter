@@ -21,7 +21,7 @@ df <- df %>%
   filter(str_detect(hashtag, "^#")) %>%
   mutate(hashtag = str_remove(hashtag,"#")) %>%
   filter(str_detect(hashtag,"men|women")) %>%
-  filter(hashtag != "men", hashtag != "women",hashtag != "mens", hashtag != "womens" !str_detect(hashtag,"ment"))
+  filter(hashtag != "men", hashtag != "women",hashtag != "mens", hashtag != "womens", !str_detect(hashtag,"ment"))
 
 tags <- df %>%
   group_by(hashtag) %>%

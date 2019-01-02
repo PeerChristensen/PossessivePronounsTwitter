@@ -5,13 +5,13 @@ library(udpipe)
 library(wordcloud)
 
 his <- read_csv("hisTweets.csv") %>%
-  select(screen_name, text)      %>% 
+  select(text)                   %>% 
   unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
   separate(bigram, c("word1", "word2"), sep = " ")     %>%
   filter(word1 == "his")
 
 #udmodel <- udpipe_download_model(language = "english")
-udmodel <- udpipe_load_model("danish-ud-2.0-170801.udpipe")
+udmodel <- udpipe_load_model("english-ud-2.0-170801.udpipe")
 
 include <- udpipe(x = his$word2,
                   object = udmodel)

@@ -1,0 +1,380 @@
+---
+title: "White men and black women: What Twitter says about gender"
+author: "Peer Christensen"
+date: "1/1/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+I've been wanting to try out the excellent rtweet package for some time now, and I recently came up with the idea to explore what Twitter users are tweeting about men and women these days. In this post, we'll look at gender pronouns and word frequency in the following analyses:
+
+- Words co-occurring with the words 'men' and 'women'
+- Hashtags co-occurring with 'men' and 'women'
+- Bigrams ending in 'men' and 'women'
+- Bigrams starting with the possessive pronouns 'his' and 'her'
+- Tri- and quadrogram(?) constructions starting with "s/he is .." and "s/he is a/an .."
+
+We won't cover how to download tweets with rtweet, but instead move right to the analyses.
+First, we'll need to load a few other packages.
+
+```{r}
+library(tidyverse)
+library(tidytext)
+library(wordcloud)
+library(tm)
+library(udpipe)
+library(magrittr)
+library(gridExtra)
+```
+
+## Men and Women
+
+The first tweets that we'll explore all contain the word 'men' or 'women'.
+
+```{r}
+df <- read_csv("mwTweets.csv")
+
+glimpse(df)
+
+range(df$created_at)
+range(df$created_at)[2]-range(df$created_at)[1]
+```
+
+As you can see, there's plenty of metadata surrounding the 214,741 tweets that I've downloaded from a roughly 20 hour period between December 17-18, 2018.
+
+Next, we'll do some preprocessing where we remove some stopwords and create a 'gender' variable to categorize our tweets.
+
+```{r}
+df                             %<>%
+  select(text, screen_name)    %>%
+  mutate(text = tolower(text)) %>%
+  mutate(gender = case_when(str_detect(text, "women") &
+                            str_detect(text, " men")  ~ "both",
+                            str_detect(text, "women") ~ "women",
+                            str_detect(text, "men")   ~ "men")) %>%
+  unnest_tokens(word, text)    %>%
+  anti_join(stop_words[stop_words$lexicon=="SMART",]) %>%
+  mutate(word = removeWords(word,c(stopwords(),"t.co","https","amp","'s","’s"))) %>%
+  add_count(word)              %>%
+  filter(n > 1, word != "", gender != "both") %>%
+  select(-n)
+
+table(df$gender)
+```
+
+We see that the majority of tweets contain 'women' rather than 'men'.
+
+Using the pairwise_count function from the widyr package, we can create new data frames with the words that most often co-occur with 'men' and 'women'.
+
+```{r}
+word_pairs_men <- df      %>%
+  filter(gender == "men") %>%
+  pairwise_count(word, screen_name, sort = TRUE) %>%
+  filter(item1 == "men")  %>% 
+  top_n(20)
+
+word_pairs_women <- df      %>%
+  filter(gender == "women") %>%
+  pairwise_count(word, screen_name, sort = TRUE)  %>%
+  filter(item1 == "women")  %>% 
+  top_n(20)
+```
+
+Let's put the data back together and plot the most common words.
+
+```{r}
+word_pairs <- rbind(word_pairs_men, word_pairs_women) %>%
+  mutate(order = rev(row_number()), item1 = factor(item1, levels = c("men", "women")))
+
+word_pairs %>% 
+  ggplot(aes(x = order, y = n, fill = item1)) + 
+  geom_col(show.legend = FALSE) + 
+  scale_x_continuous(breaks = word_pairs$order, 
+                     labels = word_pairs$item2, 
+                     expand = c(0,0)) + 
+  facet_wrap(~item1, scales = "free") +
+  scale_fill_manual(values = c("steelblue", "indianred")) + coord_flip() + labs(x = "words") +
+  theme_minimal() +
+  theme(axis.text  = element_text(size = 14),
+        axis.title   = element_text(size = 18),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        strip.text.x = element_text(size=22, face="bold"),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.y = element_blank())
+```
+
+It seems that tweets tend to characterise people on the basis of skin colour.
+A more direct way to explore this, will be to analyse two-word colocations, or bigrams, where 'men' or 'women' appear as the second word in the pair.
+
+Let's first do the necessary preprocessing and create wordcloud starting with colocations with 'men' as the second word.
+
+```{r}
+men <- read_csv("mwTweets.csv") %>%
+  select(screen_name, text)     %>% 
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ")     %>%
+  filter(word2 == "men")
+
+menCount <- men      %>%
+  count(word1,word2) %>%
+  select(word1,n)    %>%
+  arrange(desc(n))   %>%
+  anti_join(stop_words[stop_words$lexicon=="SMART",],by = c("word1" = "word")) 
+  
+wordcloud(words = menCount$word1, freq = menCount$n, min.freq = 30, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(9,"Blues")[4:9])
+```
+
+Let's skip the code and do the same for colocations with 'women'.
+
+```{r echo=F}
+women <- read_csv("mwTweets.csv") %>%
+  select(screen_name, text)       %>% 
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ")     %>%
+  filter(word2 == "women")
+
+womenCount <- women  %>%
+  filter(word1!="amp",word1!="ii") %>%
+  count(word1,word2) %>%
+  select(word1,n)    %>%
+  arrange(desc(n))   %>%
+  anti_join(stop_words[stop_words$lexicon=="SMART",],by = c("word1" = "word")) 
+
+wordcloud(words = womenCount$word1, freq = womenCount$n, min.freq = 30, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(9,"Reds")[4:9])
+```
+
+In order to make comparisons a little easier, we'll can plot frequencies more accurately with bar charts.
+
+```{r}
+menCountTop <- menCount            %>%
+  filter(word1!="amp",word1!="ii") %>%
+  mutate(row = rev(row_number()))  %>%
+  top_n(20,n)
+
+menPlot <- menCountTop %>%
+  ggplot(aes(row, n, fill = n)) +
+  geom_col(show.legend = FALSE,width = .9) +
+  coord_flip() +
+  scale_x_continuous( 
+    breaks = menCountTop$row,
+    labels = menCountTop$word1,
+    expand = c(0,0)) + 
+  theme_minimal() + 
+  theme(axis.text    = element_text(size = 14),
+        axis.title   = element_text(size = 18),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.y = element_blank()) +
+  ggtitle("\"__  Men\"") +
+  scale_fill_gradient(low=brewer.pal(9,"Blues")[2],high=brewer.pal(9,"Blues")[9])
+
+womenCountTop <- womenCount        %>%
+  mutate(row = rev(row_number()))  %>%
+  top_n(20,n)
+
+womenPlot <- womenCountTop %>%
+  ggplot(aes(row, n, fill = n)) +
+  geom_col(show.legend = FALSE,width = .9) +
+  coord_flip() +
+  scale_x_continuous( 
+    breaks = womenCountTop$row,
+    labels = womenCountTop$word1,
+    expand = c(0,0)) + 
+  theme_minimal() + 
+  theme(axis.text    = element_text(size = 14),
+        axis.title   = element_text(size = 18),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        #axis.title.y = element_text(margin = margin(r = 40,l=40)),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.y = element_blank()) +
+  ggtitle("\"__  Women\"") +
+  scale_fill_gradient(low=brewer.pal(9,"Reds")[2],high=brewer.pal(9,"Reds")[9])
+
+grid.arrange(menPlot,womenPlot, ncol = 2)
+```
+
+There are plenty of observations to make in these charts. They confirm that skin colour frequently precedes 'men' and 'women'. Interestingly, the relative frequency of 'black' and 'white' is reversed for the two genders, though I kind of suspected that 'white men' would be a prominent colocation.
+We can also observe that the sexual orientation of men is highlighted, and that 'trans' appears more frequently before 'women'.
+
+Lastly, let's compute and visualize the frequency of the most common hashtags co-occurring with 'men' and 'women' that also contain the forms 'men' and 'women'.
+
+```{r}
+df <- read_csv("mwTweets.csv") %>%
+  select(X1,screen_name,text)  %>% 
+  mutate(text = tolower(text))
+
+remove_reg <- "&amp;|&lt;|&gt;"
+
+df <- df %>%
+  filter(!str_detect(text, "^RT")) %>%
+  mutate(text = str_remove_all(text, remove_reg)) %>%
+  unnest_tokens(hashtag, text, token = "tweets") %>%
+  filter(!hashtag %in% stop_words$word,
+         !hashtag %in% str_remove_all(stop_words$word, "'")) %>%
+  filter(str_detect(hashtag, "^#")) %>%
+  mutate(hashtag = str_remove(hashtag,"#")) %>%
+  filter(str_detect(hashtag,"men|women")) %>%
+  filter(hashtag != "men", hashtag != "women",hashtag != "mens", hashtag != "womens", !str_detect(hashtag,"ment"))
+
+tags <- df %>%
+  group_by(hashtag) %>%
+  count() %>%
+  arrange(desc(n))
+
+tags <- tags %>%
+  mutate(gender = case_when( str_detect(hashtag,"women") ~ "f",
+                            !str_detect(hashtag,"women") ~ "m"))
+
+menTags <- tags %>%
+  filter(gender == "m")
+
+womenTags <- tags %>%
+  filter(gender == "f")
+
+wordcloud(words = menTags$hashtag, freq = menTags$n, min.freq = 3, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(9,"Blues")[4:9])
+
+wordcloud(words = womenTags$hashtag, freq = womenTags$n, min.freq = 3, random.order=FALSE, rot.per=0.35, 
+          colors=brewer.pal(9,"Reds")[4:9])
+```
+
+For whatever reason, the hashtags co-occurring with 'men' revolve around fashion, style and grooming.
+By contrast, the hashtags co-occurring with 'women' reflect career choices (STEM, tech, business). More generally, the construction "women in X" appears to be highly productive and frequent.
+
+## His and her bigrams
+
+Next, we'll perform frequency analyses of words following the possessive pronouns starting with 'his'.
+
+```{r}
+his <- read_csv("hisTweets.csv") %>%
+  select(text)                   %>% 
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ")     %>%
+  filter(word1 == "his")
+
+his
+```
+
+We're also going to perform parts-of-speech tagging and narrow the lexical items down to nouns. To do this, we'll use the udpipe package.
+
+```{r}
+# udmodel <- udpipe_download_model(language = "english")
+
+udmodel <- udpipe_load_model("english-ud-2.0-170801.udpipe")
+
+include <- udpipe(x = his$word2,
+                  object = udmodel)
+
+include <- include      %>%
+  select(token,upos)    %>%
+  filter(upos =="NOUN") %>%
+  select(token) 
+
+his <- his %>%
+  filter(word2 %in% include$token)
+
+his
+```
+
+Now, we can count and prepare a bar chart of the most frequent nouns following 'his'.
+
+```{r}
+hisCount <- his         %>%
+  count(word1,word2)    %>%
+  arrange(desc(n))      %>%
+  select(word2,n)       %>%
+  mutate(row = rev(row_number()))
+
+hisPlot <- hisCount     %>%
+  top_n(20,n)           %>%
+  ggplot(aes(row, n, fill = n)) +
+  geom_col(show.legend = FALSE,width = .9) +
+  coord_flip() +
+  scale_x_continuous( 
+    breaks = hisCount$row,
+    labels = hisCount$word2,
+    expand = c(0,0)) +
+  theme_minimal() + 
+  theme(axis.text    = element_text(size = 14),
+        axis.title   = element_text(size = 18),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.y = element_blank()) +
+  scale_fill_gradient(low=brewer.pal(9,"Blues")[2],high=brewer.pal(9,"Blues")[9])
+```
+
+```{r echo=F}
+library(cldr)
+her <- read_csv("herTweets.csv") %>%
+  select(screen_name, text)      %>% 
+  mutate(language = detectLanguage(text)$detectedLanguage) %>%
+  filter(language=="ENGLISH")
+  
+her <- her %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  separate(bigram, c("word1", "word2"), sep = " ")     %>%
+  filter(word1 == "her")
+
+#udmodel <- udpipe_download_model(language = "english")
+udmodel <- udpipe_load_model("english-ud-2.0-170801.udpipe")
+
+include <- udpipe(x = her$word2,
+             object = udmodel)
+
+include <- include      %>%
+  select(token,upos)    %>%
+  filter(upos =="NOUN") %>%
+  select(token) 
+
+her <- her %>%
+  filter(word2 %in% include$token)
+
+herCount <- her      %>%
+  count(word1,word2) %>%
+  arrange(desc(n))   %>%
+  select(word2,n)    %>%
+  mutate(row = rev(row_number()))
+
+herPlot <- herCount      %>%
+  top_n(20,n) %>%
+  ggplot(aes(row, n, fill = n)) +
+  geom_col(show.legend = FALSE,width=.9) +
+  coord_flip() +
+  scale_x_continuous( 
+    breaks = herCount$row,
+    labels = herCount$word2,
+    expand = c(0,0)) +
+  theme_minimal() + 
+  theme(axis.text  = element_text(size = 16),
+        axis.title   = element_text(size = 18),
+        axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        #axis.title.y = element_text(margin = margin(r = 40,l=40)),
+        panel.grid.minor.y = element_blank(),
+        panel.grid.major.y = element_blank()) +
+  scale_fill_gradient(low=brewer.pal(9,"Reds")[2],high=brewer.pal(9,"Reds")[9])
+```
+
+I've completed the same steps for nouns following 'her'. Let's plot and compare the results!
+
+```{r}
+grid.arrange(hisPlot,herPlot, ncol = 2)
+```
+
+Apparently, tweets are often concerned with family relations and body parts.
+
+## S/he is a quadrogram
+
+
+## Conclusions
+
+

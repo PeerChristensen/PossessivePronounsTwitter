@@ -8,6 +8,7 @@ library(ggraph)
 library(igraph)
 library(tm)
 library(wordcloud)
+library(magrittr)
 
 ########## 1. Prepare data ################################
 
@@ -58,7 +59,7 @@ word_pairs %>%
                      labels = word_pairs$item2, 
                      expand = c(0,0)) + 
   facet_wrap(~item1, scales = "free") +
-  scale_fill_manual(values = c("steelblue", "indianred","darkgreen")) + coord_flip() + labs(x = "words") +
+  scale_fill_manual(values = c("steelblue", "indianred")) + coord_flip() + labs(x = "words") +
   theme_minimal() +
   theme(axis.text  = element_text(size = 16),
         axis.title   = element_text(size = 18),
